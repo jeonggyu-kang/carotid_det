@@ -1,1 +1,1 @@
-# carotid_det
+# carotid_detection
