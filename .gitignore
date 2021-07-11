@@ -1,6 +1,8 @@
 carotid.json
 *.bmp
 *.json
+*.DCM
+*.dcm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
