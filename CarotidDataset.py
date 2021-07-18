@@ -1,4 +1,4 @@
-"""
+
 from datetime import MAXYEAR
 import torch
 from torch import torch.nn as nn
@@ -10,12 +10,19 @@ import cv2
 from torch.utils.dta import Dataset, DataLoader
 import torchvision
 import torchvision.transforms as transforms
-"""
+
 
 import json
 def parse_json(json_file):
     with open(json_file, 'r') as f:
         json_data = json.load(f)
+
+    file_path_list = [] #'./dataset/images/xxxx.jpg png
+    rois = [] # [345, 278, 2234, 302]
+    type = [] # 0 1 2 3 4
+    LI = [] # {'x':[1,2,3,]},'y':[1,2,3,4,5]}
+    MA = []
+
 
     for idx in range(len(json_data['roi'])):
         json_data['roi'][idx] = list(map(int, json_data['roi'][idx]))
@@ -23,14 +30,7 @@ def parse_json(json_file):
     return json_data['file_name'], json_data['roi']
 
 
-if __name__ == '__main__':
-    file_names, rois = parse_json('carotid.json')
-    print(file_names)
-    print(rois)
-    
 
-
-"""
 class CarotidDataset(Dataset): #json, xml, hdf5, html, url # init json viersion (Git) + @ ver2
     def __init__(self, root, train, rotation, translation, flip):
         self.root = root # /downloads/annotation.mat
@@ -39,14 +39,10 @@ class CarotidDataset(Dataset): #json, xml, hdf5, html, url # init json viersion 
         self.translation = translation
         self.flip = flip # horizontal flip
 
-        # TODO 
-        file_path (cv2)
+        self.samples = 
 
-        self.file_path_list = [] #'./dataset/images/xxxx.jpg png
-        self.rois = [] # [345, 278, 2234, 302]
-        self.type = [] # 0 1 2 3 4
-        self.LI = [] # {'x':[1,2,3,]},'y':[1,2,3,4,5]}
-        slef.MA
+
+
         assert len(self.file_path_list) == len(self.rois)
         # 배지어 곡선
 
@@ -108,4 +104,9 @@ class CarotidDataset(Dataset): #json, xml, hdf5, html, url # init json viersion 
 
 
         test mod?
-"""
+
+
+if __name__ == '__main__':
+    file_names, rois = parse_json('carotid.json')
+    print(file_names)
+    print(rois)
