@@ -2,7 +2,7 @@
 
 import torch.nn.functional as F
 
-from .unet_parts import *
+from unet_parts import *
 
 
 class UNet(nn.Module):
@@ -35,4 +35,5 @@ class UNet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
+
         return logits
