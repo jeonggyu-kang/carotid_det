@@ -7,7 +7,7 @@ import json
 import torch
 import torch.nn as nn
 import torchvision
-import trochvision.transforms as transforms
+import torchvision.transforms as transforms
 
 from unet_model import UNet       # model
 from dataset import CarotidSet    # custimized dataset
@@ -29,11 +29,11 @@ def main():
         print('can not use cuda')
         exit()
 
-    if not. os.path.exists(args.log_dir):
+    if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
     transform = transforms.Compose([transforms.ToTensor()])
-    test_set = CarotidSet(args.root, args.json_test, transforms=transform,
+    test_set = CarotidSet(args.root, args.json_test, transform=transform,
                             flip=False, rotation=False, translation=False)
     
     model = UNet(1,2) # input 1ch # of class 2
@@ -69,7 +69,8 @@ def main():
         sample = sample.cpu()
 
         np_img = visualize_li_ma(pred_li, pred_ma, sample)
-        str_result_file_path = os.path.join(args.log_dir, srt(indx+1),'.png')
+        str_result_file_path = os.path.join(args.log_dir, str(idx+1)+'.png')
+        #print(str_result_file_path)
         cv2.imwrite(str_result_file_path, np_img)
 
 if __name__ == '__main__':

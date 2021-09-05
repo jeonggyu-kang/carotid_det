@@ -16,7 +16,7 @@ def calc_precision(pred, gt, thres=0.5) -> float:
     return hit_cnt.item() / tot_cnt.item()
 
 
-def _logit2mask(logit, thres=0.5):
+def _logit2mask(logit, thres=0.1):
     probs = torch.sigmoid(logit)
     probs = torch.nn.functional.threshold(probs, thres, 0.)
     probs = probs.to(torch.bool)
