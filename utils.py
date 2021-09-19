@@ -16,7 +16,7 @@ def calc_precision(pred, gt, thres=0.5) -> float:
     return hit_cnt.item() / tot_cnt.item()
 
 
-def _logit2mask(logit, thres=0.1):
+def _logit2mask(logit, thres=0.5):
     probs = torch.sigmoid(logit)
     probs = torch.nn.functional.threshold(probs, thres, 0.)
     probs = probs.to(torch.bool)
@@ -81,10 +81,47 @@ def calc_iou(pred, gt, thres=0.5) -> float:
     
 def _unnorm(tensor_img):
     return (tensor_img * 255).clamp_(0,255)
+
+def visualize_gt_li_ma(gt_li, gt_ma, carotid_img):
+    n, c, h, w = carotid_img.shape # N C H W 
+
+    carotid_img = _unnorm(carotid_img).view(1, h, w)
+    carotid_img = torch.cat([carotid_img, carotid_img, carotid_img], dim=0) # 3 H W
+
+    gt_li = (gt_li.view(1,h,w) * 255).to(carotid_img.dtype)
+    gt_ma = (gt_ma.view(1,h,w) * 255).to(carotid_img.dtype)
+
+    for y in range(h):
+        for x in range(w):
+            if gt_li[0][y][x] == 255.:
+                carotid_img[0][y][x] = 255. # B
+                carotid_img[1][y][x] = 0.
+                carotid_img[2][y][x] = 0.
+            if gt_ma[0][y][x] == 255.:
+                carotid_img[2][y][x] = 255. # R
+                carotid_img[0][y][x] = 0. # R
+                carotid_img[1][y][x] = 0. # R
     
-def visualize_li_ma(li_logits, ma_logits, carotid_img):
-    li_mask = _logit2mask(li_logits)
-    ma_mask = _logit2mask(ma_logits)
+    '''
+    red = carotid_img[2:3, :, :].clone()
+    carotid_img[0:1, :, :] = gt_li
+    carotid_img[1:2, :, :] = gt_ma
+    carotid_img[2:3, :, :] = red
+    '''
+
+    np_carotid_img = carotid_img.clamp_(0,255).numpy().astype(np.uint8)
+    np_carotid_img = np_carotid_img.transpose(1,2,0)
+
+    np_gt_li = gt_li.clamp_(0,255).numpy().astype(np.uint8)
+    np_gt_ma = gt_ma.clamp_(0,255).numpy().astype(np.uint8)
+    np_gt_ma = np_gt_ma.transpose(1,2,0)
+    np_gt_li = np_gt_li.transpose(1,2,0)
+
+    return np_carotid_img #, np_gt_li, np_gt_ma
+
+def visualize_li_ma(li_logits, ma_logits, carotid_img, thres):
+    li_mask = _logit2mask(li_logits, thres=thres)
+    ma_mask = _logit2mask(ma_logits, thres=thres)
 
     #binary -> 255 add 1ch
     n, c, h, w = carotid_img.shape
@@ -100,15 +137,21 @@ def visualize_li_ma(li_logits, ma_logits, carotid_img):
     ma_mask = ma_mask.view(1,h,w)
     ma_mask = (ma_mask*255).to(carotid_img.dtype)
 
-    '''
-    ma_mask = ma_mask.clamp_(0,255).numpy().astype(np.uint8)
-    ma_mask = ma_mask.transpose(1,2,0)
-    return ma_mask
-    '''
-
     # mark lumen intia and media adventitia
-    carotid_img[0:1, :, :] = li_mask # lumen intima - blue
-    carotid_img[2:3, :, :] = ma_mask # media adventitia - red
+    for y in range(h):
+        for x in range(w):
+            if li_mask[0][y][x] == 255.:
+                carotid_img[0][y][x] = 255. # B 
+                carotid_img[1][y][x] = 0. # B 
+                carotid_img[2][y][x] = 0. # B 
+            if ma_mask[0][y][x] == 255.:
+                carotid_img[2][y][x] = 255. # R  
+                carotid_img[1][y][x] = 0.
+                carotid_img[0][y][x] = 0.
+
+
+    #carotid_img[0:1, :, :] = li_mask # lumen intima - blue
+    #carotid_img[2:3, :, :] = ma_mask # media adventitia - red
 
     np_carotid_img = carotid_img.clamp_(0,255).numpy().astype(np.uint8)
     np_carotid_img = np_carotid_img.transpose(1,2,0)

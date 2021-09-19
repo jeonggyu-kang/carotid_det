@@ -11,7 +11,9 @@ import torchvision.transforms as transforms
 
 from unet_model import UNet       # model
 from dataset import CarotidSet    # custimized dataset
-from utils import calc_iou, visualize_li_ma
+from utils import calc_iou, visualize_li_ma, visualize_gt_li_ma
+
+from tqdm import tqdm
 
 def opt():
     parser = argparse.ArgumentParser()
@@ -19,6 +21,7 @@ def opt():
     parser.add_argument('--json_test', type=str, default='./gTruth_pp_test.json')
     parser.add_argument('--log_dir', type=str, default='./vis')
     parser.add_argument('--pretrained', type=str, default=None)
+    parser.add_argument('--thres', type=float, default=0.5)
     return parser.parse_args()
 
 def main():
@@ -47,9 +50,12 @@ def main():
     model = model.to(device)
     model = model.eval() 
 
-    for idx, data in enumerate(test_set):
-        sample, gt_li, gt_ma = data  # 1 x H x W  -> N x 1 x H x W
 
+    pbar = tqdm(total=len(test_set))
+    for idx, data in enumerate(test_set):
+        sample, gt_li, gt_ma = data  
+        
+        # 1 x H x W  -> N x 1 x H x W
         sample.unsqueeze_(dim=0)
         gt_li.unsqueeze_(dim=0)
         gt_ma.unsqueeze_(dim=0)
@@ -67,11 +73,22 @@ def main():
         pred_li = pred_li.cpu()
         pred_ma = pred_ma.cpu()
         sample = sample.cpu()
+        gt_li = gt_li.cpu()
+        gt_ma = gt_ma.cpu()
 
-        np_img = visualize_li_ma(pred_li, pred_ma, sample)
+        # image save
+        np_pred_img = visualize_li_ma(pred_li, pred_ma, sample, args.thres)
+        np_gt_img = visualize_gt_li_ma(gt_li, gt_ma, sample)
+
+        final_img = cv2.hconcat([np_gt_img, np_pred_img])
+
+        
+        cv2.putText(final_img, f'thres:{args.thres}', (10,30), cv2.FONT_HERSHEY_PLAIN, 1.5, (0,255,255), 2, cv2.LINE_AA)
+
         str_result_file_path = os.path.join(args.log_dir, str(idx+1)+'.png')
-        #print(str_result_file_path)
-        cv2.imwrite(str_result_file_path, np_img)
+        cv2.imwrite(str_result_file_path, final_img)
+
+        pbar.update()
 
 if __name__ == '__main__':
     main()
