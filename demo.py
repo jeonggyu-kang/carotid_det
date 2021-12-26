@@ -48,7 +48,7 @@ def main():
         exit(1)
 
     model = model.to(device)
-    model = model.eval() 
+    model = model.eval()
 
 
     pbar = tqdm(total=len(test_set))
@@ -77,18 +77,21 @@ def main():
         gt_ma = gt_ma.cpu()
 
         # image save
-        np_pred_img = visualize_li_ma(pred_li, pred_ma, sample, args.thres)
-        np_gt_img = visualize_gt_li_ma(gt_li, gt_ma, sample)
+        np_pred_img, coords_dict = visualize_li_ma(pred_li, pred_ma, sample, args.thres, draw_line=True, blend_weight=0.5)
+        np_gt_img = visualize_gt_li_ma(gt_li, gt_ma, sample, draw_line=True, blend_weight=0.5)
 
         final_img = cv2.hconcat([np_gt_img, np_pred_img])
-
         
         cv2.putText(final_img, f'thres:{args.thres}', (10,30), cv2.FONT_HERSHEY_PLAIN, 1.5, (0,255,255), 2, cv2.LINE_AA)
 
         str_result_file_path = os.path.join(args.log_dir, str(idx+1)+'.png')
         cv2.imwrite(str_result_file_path, final_img)
+        
+        str_result_json_path = os.path.join(args.log_dir, str(idx+1)+'.json')
+        with open(str_result_json_path, 'w') as f:
+            json.dump(coords_dict, f)
 
         pbar.update()
-
+        
 if __name__ == '__main__':
     main()
