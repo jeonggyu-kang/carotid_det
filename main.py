@@ -22,11 +22,13 @@ from utils import calc_iou, calc_acc
 def opt(): # import argparse
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--root', type=str, default='./carotid_pp', help='path to dataset')
-    parser.add_argument('--json_train', type=str, default='./gTruth_pp_train.json', help='path to train dataset')
+    parser.add_argument('--root', type=str, default='./hardsample_dataset', help='path to dataset')
+    parser.add_argument('--json_train', type=str, default='./gTruth_pp_v3.json', help='path to train dataset')
     parser.add_argument('--json_test', type=str, default='./gTruth_pp_test.json', help='path to train dataset')
 
     parser.add_argument('--max_epoch', type=int, default=50, help='max train epoch')
+
+    parser.add_argument('--initial_lr', type=float, default=0.0001, help='initial learning rate')
 
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
 
@@ -45,20 +47,30 @@ def train(device, model, optimizer, criterion, scheduler, data_loader, data_set,
 
     running_loss = 0.0
 
-    running_iou_li = 0.0
-    running_iou_ma = 0.0
+    near_running_iou_li = 0.0
+    near_running_iou_ma = 0.0
 
-    running_acc_li = 0.0
-    running_acc_ma = 0.0
+    near_running_acc_li = 0.0
+    near_running_acc_ma = 0.0
+
+    far_running_iou_li = 0.0
+    far_running_iou_ma = 0.0
+
+    far_running_acc_li = 0.0
+    far_running_acc_ma = 0.0
+
 
     #* [5-2] singe epoch (train or validation)
     for idx, data in enumerate(data_loader, 0):
         #* [5-2.1] input samples, labels
-        sample, gt_li, gt_ma = data
+        sample, near_gt_li, near_gt_ma, far_gt_li, far_gt_ma = data
                 
         sample = sample.to(device)
-        gt_li = gt_li.to(device)
-        gt_ma = gt_ma.to(device)
+        near_gt_li = near_gt_li.to(device)
+        near_gt_ma = near_gt_ma.to(device)
+
+        far_gt_li = far_gt_li.to(device)
+        far_gt_ma = far_gt_ma.to(device)        
                         
         #* [5-2.2] forward pass and backward pass, loss, and gradient update
         # set gradient to zero
@@ -69,17 +81,29 @@ def train(device, model, optimizer, criterion, scheduler, data_loader, data_set,
             #probs  = torch.nn.functional.sigmoid(logits)
 
             # calcuate loss
-            logits_li = logits[:, 0:1, :, :]
-            logits_ma = logits[:, 1:2, :, :]
-            loss  = criterion(logits_li, gt_li)
-            loss += criterion(logits_ma, gt_ma)
+            near_logits_li = logits[:, 0:1, :, :]
+            near_logits_ma = logits[:, 1:2, :, :]
+
+            far_logits_li = logits[:, 2:3, :, :]
+            far_logits_ma = logits[:, 3:4, :, :]
+
+            loss  = criterion(near_logits_li, near_gt_li)
+            loss += criterion(near_logits_ma, near_gt_ma)
+
+            loss += criterion(far_logits_li, far_gt_li)
+            loss += criterion(far_logits_ma, far_gt_ma)
+
 
             # calculate iou
-            running_iou_li += calc_iou(logits[:, 0:1, :, :].detach(), gt_li.detach(), thres=0.5)
-            running_iou_ma += calc_iou(logits[:, 1:2, :, :].detach(), gt_ma.detach(), thres=0.5)
+            near_running_iou_li += calc_iou(logits[:, 0:1, :, :].detach(), near_gt_li.detach(), thres=0.5)
+            near_running_iou_ma += calc_iou(logits[:, 1:2, :, :].detach(), near_gt_ma.detach(), thres=0.5)
+            far_running_iou_li  += calc_iou(logits[:, 2:3, :, :].detach(), far_gt_li.detach(), thres=0.5)
+            far_running_iou_ma  += calc_iou(logits[:, 3:4, :, :].detach(), far_gt_ma.detach(), thres=0.5)
             # calculate accuracy
-            running_acc_li += calc_acc(logits[:, 0:1, :, :].detach(), gt_li.detach(), thres=0.5)
-            running_acc_ma += calc_acc(logits[:, 1:2, :, :].detach(), gt_ma.detach(), thres=0.5)
+            near_running_acc_li += calc_acc(logits[:, 0:1, :, :].detach(), near_gt_li.detach(), thres=0.5)
+            near_running_acc_ma += calc_acc(logits[:, 1:2, :, :].detach(), near_gt_ma.detach(), thres=0.5)
+            far_running_acc_li  += calc_acc(logits[:, 2:3, :, :].detach(), far_gt_li.detach(), thres=0.5)
+            far_running_acc_ma  += calc_acc(logits[:, 3:4, :, :].detach(), far_gt_ma.detach(), thres=0.5)
             
             # backward pass
             loss.backward()
@@ -101,21 +125,38 @@ def train(device, model, optimizer, criterion, scheduler, data_loader, data_set,
     scheduler.step()
 
     #* [5-3] print epoch accuracy
-    epoch_iou_li = running_iou_li / len(data_loader)
-    epoch_iou_ma = running_iou_ma / len(data_loader)
+    near_epoch_iou_li = near_running_iou_li / len(data_loader)
+    near_epoch_iou_ma = near_running_iou_ma / len(data_loader)
+    far_epoch_iou_li  = far_running_iou_li / len(data_loader)
+    far_epoch_iou_ma  = far_running_iou_ma / len(data_loader)
 
-    epoch_acc_li = running_acc_li / len(data_loader)
-    epoch_acc_ma = running_acc_ma / len(data_loader)
+    near_epoch_acc_li = near_running_acc_li / len(data_loader)
+    near_epoch_acc_ma = near_running_acc_ma / len(data_loader)
+    far_epoch_acc_li  = far_running_acc_li / len(data_loader)
+    far_epoch_acc_ma  = far_running_acc_ma / len(data_loader)
 
-    print("{0} - [{1}-Epoch-{2}] IoU(LI-MA): {3:.2f}, {3:.2f} , LR: {4:.5f}".format(
-        datetime.now(), 'Train', epoch, epoch_iou_li.item()*100.0, epoch_iou_ma.item()*100.0, optimizer.param_groups[0]['lr']))
-    print("{0} - [{1}-Epoch-{2}] Acc(LI-MA): {3:.2f} , LR: {4:.5f}".format(
-        datetime.now(), 'Train', epoch, epoch_acc_li.item()*100.0, epoch_acc_ma.item()*100.0, optimizer.param_groups[0]['lr']))
+        
+    print("{0} - [{1}-Epoch-{2}] (Near)IoU(LI-MA): {3:.2f}, {4:.2f} (Far)IoU(LI-MA): {5:.2f}, {6:.2f}, LR: {7:.5f}".format(
+        datetime.now(), 'Train', epoch, 
+        near_epoch_iou_li.item()*100.0, near_epoch_iou_ma.item()*100.0, 
+        far_epoch_iou_li.item()*100.0, far_epoch_iou_ma.item()*100.0, 
+        optimizer.param_groups[0]['lr']))
+    print("{0} - [{1}-Epoch-{2}] (Near)Acc(LI-MA): {3:.2f}, {4:.2f} (Far)Acc(LI-MA): {5:.2f}, {6:.2f}, LR: {6:.5f}".format(
+        datetime.now(), 'Train', epoch, 
+        near_epoch_acc_li.item()*100.0, near_epoch_acc_ma.item()*100.0, 
+        far_epoch_acc_li.item()*100.0, far_epoch_acc_ma.item()*100.0, 
+        optimizer.param_groups[0]['lr']))
 
-    writer.add_scalar('IoU/train/li', epoch_iou_li.item()*100.0, epoch*len(data_loader))
-    writer.add_scalar('IoU/train/ma', epoch_iou_ma.item()*100.0, epoch*len(data_loader))
-    writer.add_scalar('Acc/train/li', epoch_acc_li.item()*100.0, epoch*len(data_loader))
-    writer.add_scalar('Acc/train/ma', epoch_acc_ma.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/train/near/li', near_epoch_iou_li.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/train/near/ma', near_epoch_iou_ma.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/train/far/li', far_epoch_iou_li.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/train/far/ma', far_epoch_iou_ma.item()*100.0, epoch*len(data_loader))
+
+    writer.add_scalar('Acc/train/near/li', near_epoch_acc_li.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/train/near/ma', near_epoch_acc_ma.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/train/far/li', far_epoch_acc_li.item()*100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/train/far/ma', far_epoch_acc_ma.item()*100.0, epoch*len(data_loader))
+
 
 ###################################################################
 #* validation test function
@@ -133,11 +174,14 @@ def test(device, model, criterion, data_loader, data_set, writer, epoch):
     #* [5-2] singe epoch (train or validation)
     for idx, data in enumerate(data_loader, 0):
         #* [5-2.1] input samples, labels
-        sample, gt_li, gt_ma = data
+        sample, near_gt_li, near_gt_ma, far_gt_li, far_gt_ma = data
                 
         sample = sample.to(device)
-        gt_li = gt_li.to(device)
-        gt_ma = gt_ma.to(device)
+        near_gt_li = near_gt_li.to(device)
+        near_gt_ma = near_gt_ma.to(device)
+
+        far_gt_li = far_gt_li.to(device)
+        far_gt_ma = far_gt_ma.to(device)   
 
         #* [5-2.2] forward pass and backward pass, loss, and gradient update
         with torch.set_grad_enabled(False):
@@ -146,30 +190,51 @@ def test(device, model, criterion, data_loader, data_set, writer, epoch):
             #probs  = torch.nn.functional.sigmoid(logits)   
 
             #* [5-2.3] running loss and accuracy
-            running_iou_li += calc_iou(logits[:, 0:1, :, :], gt_li, thres=0.5)
-            running_iou_ma += calc_iou(logits[:, 1:2, :, :], gt_ma, thres=0.5)
+            near_running_iou_li += calc_iou(logits[:, 0:1, :, :], near_gt_li, thres=0.5)
+            near_running_iou_ma += calc_iou(logits[:, 1:2, :, :], near_gt_ma, thres=0.5)
+            far_running_iou_li  += calc_iou(logits[:, 2:3, :, :], far_gt_li, thres=0.5)
+            far_running_iou_ma  += calc_iou(logits[:, 3:4, :, :], far_gt_ma, thres=0.5)
             # calculate accuracy
-            running_acc_li += calc_acc(logits[:, 0:1, :, :], gt_li, thres=0.5)
-            running_acc_ma += calc_acc(logits[:, 1:2, :, :], gt_ma, thres=0.5)
+            near_running_acc_li += calc_acc(logits[:, 0:1, :, :], near_gt_li, thres=0.5)
+            near_running_acc_ma += calc_acc(logits[:, 1:2, :, :], near_gt_ma, thres=0.5)
+            far_running_acc_li  += calc_acc(logits[:, 2:3, :, :], far_gt_li, thres=0.5)
+            far_running_acc_ma  += calc_acc(logits[:, 3:4, :, :], far_gt_ma, thres=0.5)
             
     
     #* [5-3] print epoch accuracy
-    epoch_iou_li = running_iou_li / len(data_loader)
-    epoch_iou_ma = running_iou_ma / len(data_loader)
+    near_epoch_iou_li = near_running_iou_li / len(data_loader)
+    near_epoch_iou_ma = near_running_iou_ma / len(data_loader)
+    far_epoch_iou_li  = far_running_iou_li / len(data_loader)
+    far_epoch_iou_ma  = far_running_iou_ma / len(data_loader)
 
-    epoch_acc_li = running_acc_li / len(data_loader)
-    epoch_acc_ma = running_acc_ma / len(data_loader)
+    near_epoch_acc_li = nearrunning_acc_li / len(data_loader)
+    near_epoch_acc_ma = nearrunning_acc_ma / len(data_loader)
+    far_epoch_acc_li  = far_running_acc_li / len(data_loader)
+    far_epoch_acc_ma  = far_running_acc_ma / len(data_loader)
 
-    print("{0} - [{1}-Epoch-{2}] IoU(LI): {3:.2f}".format(
-        datetime.now(), 'Validation', epoch, epoch_iou_li.item()*100.0))
-    print("{0} - [{1}-Epoch-{2}] IoU(MA): {3:.2f}".format(
-        datetime.now(), 'Validation', epoch, epoch_iou_ma.item()*100.0))
+    print("{0} - [{1}-Epoch-{2}] (Near)IoU(LI-MA): {3:.2f}, {4:.2f} (Far)IoU(LI-MA): {5:.2f}, {6:.2f}".format(
+        datetime.now(), 'Validation', epoch, 
+        near_epoch_iou_li.item()*100.0, near_epoch_iou_ma.item()*100.0,
+        far_epoch_iou_li.item()*100.0, far_epoch_iou_ma.item()*100.0
+    ))
+    print("{0} - [{1}-Epoch-{2}] (Near)IoU(LI-MA): {3:.2f}, {4:.2f} (Far)IoU(LI-MA): {5:.2f}, {6:.2f}".format(
+        datetime.now(), 'Validation', epoch,
+        near_epoch_iou_ma.item()*100.0, near_epoch_iou_ma.item()*100.0,
+        far_epoch_iou_ma.item()*100.0, far_epoch_iou_ma.item()*100.0
+    ))
     print('='*80)    
     
-    writer.add_scalar('IoU/val/li', epoch_iou_li.item() * 100.0, epoch*len(data_loader))
-    writer.add_scalar('IoU/val/ma', epoch_iou_ma.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/val/near/li', near_epoch_iou_li.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/val/near/ma', near_epoch_iou_ma.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/val/far/li', far_epoch_iou_li.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('IoU/val/far/ma', far_epoch_iou_ma.item() * 100.0, epoch*len(data_loader))
+
+    writer.add_scalar('Acc/val/near/li', near_epoch_acc_li.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/val/near/ma', near_epoch_acc_ma.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/val/far/li', far_epoch_acc_li.item() * 100.0, epoch*len(data_loader))
+    writer.add_scalar('Acc/val/far/ma', far_epoch_acc_ma.item() * 100.0, epoch*len(data_loader))
     
-    return (epoch_iou_li.item() + epoch_iou_ma.item()) / 2
+    return (near_epoch_iou_li.item() + near_epoch_iou_ma.item() + far_epoch_iou_li.item() + far_epoch_iou_ma.item())/4
 
 
 def main():
@@ -219,7 +284,7 @@ def main():
     #* [4] Network (or Model) + model load + optimizer + loss fucntion + learning rate scheduler
     ###################################################################
     # netweork 
-    num_classes = 2 # pixel-wise
+    num_classes = 4 # pixel-wise
     model = UNet(1, num_classes)
     #print(model)
 
@@ -227,15 +292,15 @@ def main():
     criterion = nn.BCEWithLogitsLoss()
 
     # optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=args.initial_lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     # scheduler
     if args.max_epoch == 200:
         milestones = [ 50, 100, 150 ]
     elif args.max_epoch == 50:
         milestones = [ x for x in range(8, 50, 8)]
-    elif args.max_epoch > 200: # sanity check
+    elif args.max_epoch == 200: # sanity check
         print('performing sanity check')
-        milestones = [ 200, 400, 600 ]
+        milestones = [ 80, 160 ]
     else:
         raise NotImplementedError
     

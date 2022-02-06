@@ -82,49 +82,91 @@ class DVC:
         with open(json_path, 'r') as f:
             meta_data = json.load(f)
 
-        new_format = self._get_new_dict(str(file_name))
+        new_format_near = self._get_new_dict(str(file_name))
+        new_format_far  = self._get_new_dict(str(file_name))
 
-        x_min, y_min = float('inf'), float('inf')
-        x_max, y_max = 0, 0
+        near_x_min, near_y_min = float('inf'), float('inf')
+        near_x_max, near_y_max = 0, 0
 
+        far_x_min, far_y_min = float('inf'), float('inf')
+        far_x_max, far_y_max = 0, 0
+
+        is_near_lima_annotated = False
+        is_far_lima_annotated = False
 
         if image_path:
             img = cv2.imread(image_path)
         
         for line_dict in meta_data['shapes']:
             line_type = line_dict['label']
-            
-            
+
+            if not (line_type in ['NLI', 'NMA', 'FLI', 'FMA']):
+                raise ValueError(f'Annotated label must be NLI, NMA, FLI, or FMA, but got {line_type} in {json_path}.')
+
             for (x,y) in line_dict['points']:
-                new_format[str(file_name)][line_type]['x'].append(x)
-                new_format[str(file_name)][line_type]['y'].append(y)
+                if line_type in ['NLI', 'NMA']: # near
+                    new_format_near[str(file_name)][line_type]['x'].append(x)
+                    new_format_near[str(file_name)][line_type]['y'].append(y)
+                    near_x_min = min(near_x_min, x)
+                    near_y_min = min(near_y_min, y)
+
+                    near_x_max = max(near_x_max, x)
+                    near_y_max = max(near_y_max, y)
+                    is_near_lima_annotated = True
+                    
+                    
+                elif line_type in ['FLI', 'FMA']: # far
+                    new_format_far[str(file_name)][line_type]['x'].append(x)
+                    new_format_far[str(file_name)][line_type]['y'].append(y)
+                    far_x_min = min(far_x_min, x)
+                    far_y_min = min(far_y_min, y)
+
+                    far_x_max = max(far_x_max, x)
+                    far_y_max = max(far_y_max, y)
+                    is_far_lima_annotated = True
+                    
         
                 if image_path:
                     if line_type == 'NLI':
                         color = (255,0,0)
                     elif line_type == 'NMA':
                         color = (0,0,255)
-                    else:
+                    elif line_type == 'FLI':
                         color = (0,255,0)
+                    elif line_type == 'FMA':
+                        color = (0,255,255)
                     img = cv2.circle(img, tuple(map(int, (x, y))), 3, color, cv2.FILLED)
 
-                x_min = min(x_min, x)
-                y_min = min(y_min, y)
+                    h_loc = 50
+                    for dir_name in json_path.split('/'):
+                        img = cv2.putText(img, dir_name, (50, h_loc), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+                        h_loc += 50
 
-                x_max = max(x_max, x)
-                y_max = max(y_max, y)
 
+
+
+
+        #if image_path and is_near_lima_annotated and is_far_lima_annotated:
         if image_path:
             debug_file_path = os.path.join(self.vis, image_path.split('/')[-1])
             cv2.imwrite(debug_file_path, img)
             
+        
+        if calc_roi: # xmin ymin xmax ymax
+            if is_near_lima_annotated:
+                new_format_near[str(file_name)]['roi'] = [near_x_min-self.roi_expand_thres, near_y_min-self.roi_expand_thres, near_x_max+self.roi_expand_thres, near_y_max+self.roi_expand_thres]
+                new_format_near[str(file_name)]['roi'] = list(map(int, new_format_near[str(file_name)]['roi']))
+            if is_far_lima_annotated:
+                new_format_far[str(file_name)]['roi'] = [far_x_min-self.roi_expand_thres, far_y_min-self.roi_expand_thres, far_x_max+self.roi_expand_thres, far_y_max+self.roi_expand_thres]
+                new_format_far[str(file_name)]['roi'] = list(map(int, new_format_far[str(file_name)]['roi']))
 
-        if calc_roi:
-            # xmin ymin xmax ymax
-            new_format[str(file_name)]['roi'] = [x_min-self.roi_expand_thres, y_min-self.roi_expand_thres, x_max+self.roi_expand_thres, y_max+self.roi_expand_thres]
-            new_format[str(file_name)]['roi'] = list(map(int, new_format[str(file_name)]['roi']))
+        ret = []
+        if is_near_lima_annotated:
+            ret.append(new_format_near)
+        if is_far_lima_annotated:
+            ret.append(new_format_far)
 
-        return new_format
+        return ret
     
 
     def _parse_old_json(self, old_dict, file_name):
@@ -158,26 +200,32 @@ class DVC:
             for bmp_name in old_json_dict:
                 json_dict.update(self._parse_old_json(old_json_dict[bmp_name], bmp_name))
 
-
-
         # process new annotated samples
         for i, (f_json, f_bmp) in enumerate(self._get_json_list()):
             src_file_path = f_bmp
             bmp_file_name = str(sample_idx) + '.bmp'
             dst_file_path = os.path.join(self.dst_root_dir, bmp_file_name)
-
-            #print(src_file_path)
-            #print(dst_file_path)
-
+            
             # copy data
             shutil.copy2(src_file_path, dst_file_path)
-            
             # json parse
-            json_dict.update(self._parse_json(f_json, bmp_file_name, image_path=dst_file_path))
+            annotations = self._parse_json(f_json, bmp_file_name, image_path=dst_file_path)
+            
+            if len(annotations) > 1:
+                dst_file_path2 = dst_file_path.replace('.bmp', '-1.bmp')
+                shutil.copy2(dst_file_path, dst_file_path2)
+                        
+            for i in range(len(annotations)):
+                if i == 1: # 2nd dict
+                    key = list(annotations[i].keys())[0]
+                    new_key = key.replace('.bmp', '-1.bmp')
+                    json_dict.update({
+                        new_key : annotations[i][key]  
+                    })
+                else:
+                    json_dict.update(annotations[i])
 
             sample_idx += 1
-
-
 
         # dump to json
         with open(self.dst_json, 'w') as f:
@@ -188,10 +236,10 @@ class DVC:
 def opt():
     return EasyDict({
         'src_root_dir': './hard_case',
-        'dst_root_dir': './carotid_pp',
-        'old_json': './gTruth_pp_train.json',
+        'dst_root_dir': './hardsample_dataset_v4',
+        'old_json': 'gTruth_pp_train.json',
         #'old_json': None,
-        'dst_json': './gTruth_pp_v2.json',
+        'dst_json': 'gTruth_pp_v4.json',
         'thres': 20,
         'vis': './parsing_results'
     })
