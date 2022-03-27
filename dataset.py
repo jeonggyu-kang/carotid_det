@@ -83,21 +83,33 @@ class CarotidSet(Dataset):
         roi = self.anno[index]['roi']
 
 
+        if 'FLI' in self.anno[index]:
+
+            fli_x = self.anno[index]['FLI']['x']
+            fli_y = self.anno[index]['FLI']['y']
+            fma_x = self.anno[index]['FMA']['x']
+            fma_y = self.anno[index]['FMA']['y']
 
 
-        fli_x = self.anno[index]['FLI']['x']
-        fli_y = self.anno[index]['FLI']['y']
-        fma_x = self.anno[index]['FMA']['x']
-        fma_y = self.anno[index]['FMA']['y']
+            nli_x = self.anno[index]['NLI']['x']
+            nli_y = self.anno[index]['NLI']['y']
+            nma_x = self.anno[index]['NMA']['x']
+            nma_y = self.anno[index]['NMA']['y']
+
+        else:
+
+            fli_x = self.anno[index]['li']['x']
+            fli_y = self.anno[index]['li']['y']
+            fma_x = self.anno[index]['ma']['x']
+            fma_y = self.anno[index]['ma']['y']
+
+            nli_x = []
+            nli_y = []
+            nma_x = []
+            nma_y = []
 
 
-        nli_x = self.anno[index]['NLI']['x']
-        nli_y = self.anno[index]['NLI']['y']
-        nma_x = self.anno[index]['NMA']['x']
-        nma_y = self.anno[index]['NMA']['y']
 
-
-        
         # make LI & MA gt
 
         gt_images = []        
